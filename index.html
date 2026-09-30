@@ -53,9 +53,10 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const K='gareport.v1', SITE='https://goldapple.by/', STORE='минск, пр-т. Победителей, 9';
 const LBL={many:'Много',few:'Мало',none:'Нет'};
-let S={items:[],st:{},pos:0,tab:'check',edit:null,armed:null,msg:''};
-try{const d=JSON.parse(localStorage.getItem(K)||'null');if(d){S.items=d.items||[];S.st=d.st||{};S.pos=d.pos||0}}catch(e){}
-function save(){try{localStorage.setItem(K,JSON.stringify({items:S.items,st:S.st,pos:S.pos}))}catch(e){}}
+let S={items:[],st:{},links:{},pos:0,tab:'check',edit:null,armed:null,msg:'',diff:null,bk:0};
+try{const d=JSON.parse(localStorage.getItem(K)||'null');if(d){S.items=d.items||[];S.st=d.st||{};S.pos=d.pos||0;S.links=d.links||{};S.bk=d.bk||0}}catch(e){}
+S.items.forEach(x=>{if(x.link)S.links[x.sku]=x.link});
+function save(){try{localStorage.setItem(K,JSON.stringify({items:S.items,st:S.st,pos:S.pos,links:S.links,bk:S.bk}))}catch(e){}}
 function copy(t){try{navigator.clipboard.writeText(t).then(()=>flash('Скопировано'),()=>fb(t))}catch(e){fb(t)}}
 function fb(t){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');flash('Скопировано')}catch(e){flash('Не удалось скопировать, выделите текст вручную')}a.remove()}
 function flash(m){S.msg=m;render();setTimeout(()=>{S.msg='';render()},2000)}
@@ -69,35 +70,59 @@ function importFile(file){
   rd.onload=e=>{try{
     const wb=XLSX.read(e.target.result,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-    const start=isNaN(parseInt(rows[0]&&rows[0][0]))?1:0, items=[];
-    for(let i=start;i<rows.length;i++){const r=rows[i],name=String(r[3]).trim(),sku=String(r[2]).trim();
+    const hdr=(rows[0]||[]).map(v=>String(v).trim().toLowerCase()), has=hdr.includes('sku');
+    const col=(f,d)=>has?hdr.findIndex(f):d;
+    const cN=col(v=>v==='номер'||v==='№',0),cC=col(v=>v.startsWith('код'),1),cS=col(v=>v==='sku',2),cM=col(v=>v.startsWith('назван')||v.startsWith('наименов'),3),cL=col(v=>v.startsWith('ссылк'),4);
+    if(has&&cM<0){flash('Не нашла колонку «Название» в первой строке');return}
+    const g=(r,c)=>c<0||r[c]==null?'':String(r[c]).trim();
+    const start=has||isNaN(parseInt(rows[0]&&rows[0][0]))?1:0, items=[];
+    for(let i=start;i<rows.length;i++){const r=rows[i],name=g(r,cM),sku=g(r,cS);
       if(!name&&!sku)continue;
-      items.push({n:String(r[0]||i+1).trim(),code:String(r[1]).trim(),sku,name,link:safe(String(r[4]||'').trim())})}
+      items.push({n:g(r,cN)||String(i+1),code:g(r,cC),sku,name,link:safe(g(r,cL))})}
     if(!items.length){flash('В файле нет позиций');return}
-    const old={};S.items.forEach(x=>{if(x.link)old[x.sku]=x.link});items.forEach(x=>{if(!x.link&&old[x.sku])x.link=old[x.sku]});
+    const d=diffItems(S.items,items);
+    items.forEach(x=>{if(x.link)S.links[x.sku]=x.link;else if(S.links[x.sku])x.link=S.links[x.sku]});
     const keep={};items.forEach(x=>{if(S.st[x.n])keep[x.n]=S.st[x.n]});
-    S.items=items;S.st=keep;S.pos=0;S.tab='check';save();flash('Загружено позиций: '+items.length)
+    S.diff=S.items.length?d:null;S.items=items;S.st=keep;S.pos=0;S.tab=S.diff?'list':'check';save();flash('Загружено позиций: '+items.length)
   }catch(err){flash('Не удалось прочитать файл')}};
   rd.readAsArrayBuffer(file);
 }
 $('#f').addEventListener('change',e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value=''});
 
+function diffItems(a,b){
+  const ma={},mb={};a.forEach(x=>ma[x.sku]=x);b.forEach(x=>mb[x.sku]=x);
+  const add=b.filter(x=>!ma[x.sku]),rem=a.filter(x=>!mb[x.sku]),chg=[];
+  b.forEach(x=>{const o=ma[x.sku];if(!o)return;const t=[];
+    if(o.n!==x.n)t.push('номер '+o.n+' → '+x.n);
+    if(o.name!==x.name)t.push('название «'+o.name+'» → «'+x.name+'»');
+    if(o.code!==x.code)t.push('код поставщика '+o.code+' → '+x.code);
+    if(t.length)chg.push({x,t:t.join('; ')})});
+  return {add,rem,chg}}
+function vDiff(){
+  const d=S.diff;if(!d)return '';
+  const L=(t,arr,f)=>arr.length?`<p><b>${t} (${arr.length})</b></p><div class="mut">${arr.slice(0,30).map(f).join('<br>')}${arr.length>30?'<br>и ещё '+(arr.length-30):''}</div>`:'';
+  const same=!d.add.length&&!d.rem.length&&!d.chg.length,nol=S.items.filter(x=>!x.link).length;
+  return `<div class="card"><h2>Что изменилось в новом файле</h2>${same?'<p>Список не изменился.</p>':L('Добавлено',d.add,x=>'№ '+esc(x.n)+' '+esc(x.name))+L('Убрано',d.rem,x=>'№ '+esc(x.n)+' '+esc(x.name))+L('Изменено',d.chg,c=>'№ '+esc(c.x.n)+': '+esc(c.t))}<p>Ссылки сохранены. Без ссылки: ${nol} из ${S.items.length}.</p><button class="btn p" data-act="okdiff">Понятно</button></div>`}
+function bkWarn(){return S.items.length&&(S.bk?Date.now()-S.bk>14*864e5:done()>0)?'<div class="card mut">Сделайте резервную копию: вкладка «Список», «Скопировать копию».</div>':''}
 function empty(){return `<div class="card"><h2>Загрузите список</h2><p class="mut">Excel с колонками: Номер, Код товара поставщика, SKU, Название. Загрузить нужно один раз, дальше список хранится в телефоне.</p><div class="row2"><button class="btn p" data-act="upload">Выбрать файл Excel</button></div></div>`}
 
 function vCheck(){
   if(!S.items.length)return empty();
   const it=S.items[S.pos],a=S.st[it.n],d=done(),N=S.items.length;
   const b=(k,t,s)=>`<button class="b-${k} ${a===k?'sel':''}" data-act="set" data-v="${k}">${t}<small>${s}</small></button>`;
-  return `<div class="mut">Отмечено ${d} из ${N}</div><div class="pg"><i style="width:${d/N*100}%"></i></div>
+  return `${bkWarn()}<div class="mut">Отмечено ${d} из ${N}</div><div class="pg"><i style="width:${d/N*100}%"></i></div>
   <div class="card"><div class="num">№ ${esc(it.n)} · позиция ${S.pos+1} из ${N}</div><h2>${esc(it.name)}</h2>
   <div class="sku">SKU ${esc(it.sku)}</div>
   <div class="row2">${it.link?`<a class="btn p" href="${esc(it.link)}" target="_blank" rel="noopener">Открыть товар</a>`:`<a class="btn" href="${SITE}" target="_blank" rel="noopener">Открыть сайт</a>`}<button class="btn" data-act="cp" data-v="${esc(it.sku)}">Копировать SKU</button></div>${it.link?'':'<label>Ссылка на товар: вставьте, и она сохранится</label><input type="text" id="lk" placeholder="https://goldapple.by/...">'}
-  <div class="big">${b('many','Много','больше 3 шт')}${b('few','Мало','3 шт и меньше')}${b('none','Нет','нет в наличии')}</div></div>
+  <div class="big">${b('many','Есть в наличии','много')}${b('few','Осталось меньше 3','мало')}${b('none','Нет в наличии','нет')}</div></div>
   <div class="row2"><button class="btn" data-act="prev">‹ Назад</button><button class="btn" data-act="next">Пропустить ›</button><button class="btn" data-act="todo">К неотмеченным</button></div>`;
 }
 
 function vList(){
-  let h=`<div class="row2"><button class="btn p" data-act="add">Добавить позицию</button><button class="btn" data-act="upload">Загрузить Excel</button></div><div class="row2"><button class="btn" data-act="cplist">Скопировать список (для Excel)</button></div>`;
+  let h=`<div class="row2"><button class="btn p" data-act="add">Добавить позицию</button><button class="btn" data-act="upload">Загрузить Excel</button></div><div class="row2"><button class="btn" data-act="cplist">Скопировать список (для Excel)</button></div>
+  <div class="card"><b>Резервная копия</b><div class="mut">${S.bk?'Последняя: '+new Date(S.bk).toLocaleDateString('ru-RU'):'Копия ещё не делалась'}. В ней список, ссылки и отметки. Отправьте текст себе в мессенджер.</div>
+  <div class="row2"><button class="btn p" data-act="mkbk">Скопировать копию</button></div>
+  <label>Восстановить: вставьте текст копии</label><input type="text" id="bkin" placeholder="вставьте копию сюда"><div class="row2"><button class="btn" data-act="rsbk">Восстановить</button></div></div>`;
   if(S.edit)h+=form();
   h+=`<div class="card">`+(S.items.length?S.items.map((x,i)=>`<div class="li" data-act="edit" data-i="${i}"><span class="dot ${S.st[x.n]||''}"></span><b>${esc(x.n)}</b><span>${esc(x.name)}</span></div>`).join(''):'<span class="mut">Список пуст</span>')+`</div>`;
   return h;
@@ -123,7 +148,7 @@ function vRep(){
 
 function render(){
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===S.tab));
-  $('#main').innerHTML=(S.msg?`<div class="card mut">${esc(S.msg)}</div>`:'')+(S.tab==='check'?vCheck():S.tab==='list'?vList():vRep());
+  $('#main').innerHTML=(S.msg?`<div class="card mut">${esc(S.msg)}</div>`:'')+(S.tab==='list'?vDiff():'')+(S.tab==='check'?vCheck():S.tab==='list'?vList():vRep());
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-tab],[data-act]');if(!t)return;
@@ -136,6 +161,14 @@ document.addEventListener('click',e=>{
   else if(a==='todo'){let j=S.items.findIndex((x,i)=>i>S.pos&&!S.st[x.n]);if(j<0)j=S.items.findIndex(x=>!S.st[x.n]);if(j<0)flash('Все позиции отмечены');else{S.pos=j;save();render()}}
   else if(a==='cp')copy(t.dataset.v);
   else if(a==='cprep')copy(report());
+  else if(a==='okdiff'){S.diff=null;render()}
+  else if(a==='mkbk'){S.bk=Date.now();save();copy('OTCHET1:'+JSON.stringify({items:S.items,st:S.st,links:S.links}))}
+  else if(a==='rsbk'){try{
+    const d=JSON.parse($('#bkin').value.trim().replace(/^OTCHET1:/,''));if(!Array.isArray(d.items))throw 0;
+    const L={};for(const k in (d.links||{})){const u=safe(String(d.links[k]));if(u)L[k]=u}
+    S.items=d.items.map(x=>({n:String(x.n),code:String(x.code||''),sku:String(x.sku||''),name:String(x.name||''),link:safe(String(x.link||''))}));
+    S.items.forEach(x=>{if(x.link)L[x.sku]=x.link});S.links=L;S.st=d.st||{};S.pos=0;S.diff=null;save();flash('Восстановлено позиций: '+S.items.length)
+  }catch(err){flash('Не удалось прочитать копию. Скопируйте текст целиком')}}
   else if(a==='cplist')copy(S.items.map(x=>[x.n,x.code,x.sku,x.name,x.link||''].join('\t')).join('\n'));
   else if(a==='reset')arm('reset',()=>{S.st={};S.pos=0;S.tab='check';save();render()});
   else if(a==='add'){S.edit={i:-1};render()}
@@ -145,13 +178,14 @@ document.addEventListener('click',e=>{
   else if(a==='saveedit'){
     const x={n:$('#e_n').value.trim(),code:$('#e_c').value.trim(),sku:$('#e_s').value.trim(),name:$('#e_m').value.trim(),link:safe($('#e_l').value.trim())};
     if(!x.n||!x.name){flash('Заполните номер и название');return}
+    if(x.link)S.links[x.sku]=x.link;else delete S.links[x.sku];
     const i=S.edit.i;
     if(i<0)S.items.push(x);else{if(S.items[i].n!==x.n){S.st[x.n]=S.st[S.items[i].n];delete S.st[S.items[i].n]}S.items[i]=x}
     S.edit=null;save();render();
   }
 });
 document.addEventListener('change',e=>{
-  if(e.target.id==='lk'){const v=safe(e.target.value.trim());if(!v){flash('Ссылка должна начинаться с https://');return}S.items[S.pos].link=v;save();render()}
+  if(e.target.id==='lk'){const v=safe(e.target.value.trim());if(!v){flash('Ссылка должна начинаться с https://');return}S.items[S.pos].link=v;S.links[S.items[S.pos].sku]=v;save();render()}
 });
 render();
 </script></body></html>
