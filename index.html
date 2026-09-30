@@ -1,191 +1,102 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8">
+<html lang="ru">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>Отчёт по наличию</title>
+<meta name="color-scheme" content="light dark">
+<title>Проверка наличия</title>
 <style>
-:root{box-sizing:border-box;--bg:#fff;--card:#fff;--tx:#000;--mut:#5c5c5c;--line:#e3e3e3;--acc:#000;--acct:#fff;--lime:#c6f432;--many:#000;--few:#000;--none:#d1342a;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--card:#111;--tx:#fff;--mut:#a3a3a3;--line:#2b2b2b;--acc:#c6f432;--acct:#000;--none:#ff6b5e}}
-:root[data-theme="dark"]{--bg:#000;--card:#111;--tx:#fff;--mut:#a3a3a3;--line:#2b2b2b;--acc:#c6f432;--acct:#000;--none:#ff6b5e}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--tx);font:17px/1.4 -apple-system,"SF Pro Text",system-ui,"Segoe UI",sans-serif}
-.w{max-width:520px;margin:0 auto;padding:12px 14px 40px}
-nav{display:flex;gap:6px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:8px 0;z-index:2}
-nav button{flex:1;padding:10px 4px;border:1.5px solid var(--line);background:var(--card);color:var(--tx);border-radius:12px;font:600 15px inherit;font-family:inherit}
-nav button.on{background:var(--acc);border-color:var(--acc);color:var(--acct)}
-nav{border-bottom:4px solid var(--lime);padding-bottom:10px;margin-bottom:6px}
-button{font-family:inherit;cursor:pointer}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:10px 0}
-.pg{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0 2px}
-.pg i{display:block;height:100%;background:var(--lime)}
-.mut{color:var(--mut);font-size:14px}
-h2{margin:2px 0 6px;font-size:21px;line-height:1.25}
-.num{font-size:14px;color:var(--mut)}
-.sku{font-variant-numeric:tabular-nums;font-size:15px}
-.big{display:grid;gap:10px;margin-top:14px}
-.big button{padding:17px;border-radius:14px;border:2.5px solid;background:transparent;font-size:20px;font-weight:700;text-align:left}
-.b-many,.b-few{color:var(--tx);border-color:var(--tx)}.b-none{color:var(--none);border-color:var(--none)}
-.big button.sel.b-many{background:var(--lime);color:#000;border-color:var(--lime)}.big button.sel.b-few{background:var(--tx);color:var(--bg)}.big button.sel.b-none{background:var(--none);color:#fff}
-.big button.sel::before{content:"✓ "}
-.big small{font-weight:500;font-size:14px;margin-left:6px}
-.row2{display:flex;gap:8px;margin:8px 0}
-.btn{flex:1;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--tx);font-size:16px;font-weight:600;text-align:center;text-decoration:none}
-.btn.p{background:var(--acc);border-color:var(--acc);color:var(--acct)}
-.btn.p:active{background:var(--lime);color:#000}
-.btn.d{color:var(--none);border-color:var(--none)}
-.li{display:flex;gap:10px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line)}
-.li span:last-child{flex:1}
-.dot{width:12px;height:12px;border-radius:50%;background:var(--line);flex:none}
-.dot.many{background:var(--lime);box-shadow:0 0 0 1.5px var(--tx)}.dot.few{background:var(--tx)}.dot.none{background:var(--none)}
-input[type=text]{width:100%;padding:11px;margin:4px 0 10px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--tx);font:16px inherit;font-family:inherit}
-label{font-size:14px;color:var(--mut)}
-pre{white-space:pre-wrap;word-break:break-word;font:16px/1.5 inherit;font-family:inherit;margin:0}
-.warn{background:var(--lime);color:#000;font-weight:700;padding:4px 10px;border-radius:8px;display:inline-block;margin-bottom:10px}
-</style></head><body>
-<div class="w">
-<nav><button data-tab="check">Проверка</button><button data-tab="list">Список</button><button data-tab="rep">Отчёт</button></nav>
-<div id="main"></div>
-<input type="file" id="f" accept=".xlsx,.xls,.csv" hidden>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script>
-const $=s=>document.querySelector(s);
-const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const K='gareport.v1', SITE='https://goldapple.by/', STORE='минск, пр-т. Победителей, 9';
-const LBL={many:'Много',few:'Мало',none:'Нет'};
-let S={items:[],st:{},links:{},pos:0,tab:'check',edit:null,armed:null,msg:'',diff:null,bk:0};
-try{const d=JSON.parse(localStorage.getItem(K)||'null');if(d){S.items=d.items||[];S.st=d.st||{};S.pos=d.pos||0;S.links=d.links||{};S.bk=d.bk||0}}catch(e){}
-S.items.forEach(x=>{if(x.link)S.links[x.sku]=x.link});
-function save(){try{localStorage.setItem(K,JSON.stringify({items:S.items,st:S.st,pos:S.pos,links:S.links,bk:S.bk}))}catch(e){}}
-function copy(t){try{navigator.clipboard.writeText(t).then(()=>flash('Скопировано'),()=>fb(t))}catch(e){fb(t)}}
-function fb(t){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');flash('Скопировано')}catch(e){flash('Не удалось скопировать, выделите текст вручную')}a.remove()}
-function flash(m){S.msg=m;render();setTimeout(()=>{S.msg='';render()},2000)}
-function arm(k,fn){if(S.armed===k){S.armed=null;fn()}else{S.armed=k;render();setTimeout(()=>{if(S.armed===k){S.armed=null;render()}},3000)}}
-const safe=u=>/^https?:\/\//i.test(u)?u:'';
-const done=()=>S.items.filter(x=>S.st[x.n]).length;
-
-function importFile(file){
-  if(typeof XLSX==='undefined'){flash('Не загрузился модуль Excel. Проверьте интернет');return}
-  const rd=new FileReader();
-  rd.onload=e=>{try{
-    const wb=XLSX.read(e.target.result,{type:'array'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-    const hdr=(rows[0]||[]).map(v=>String(v).trim().toLowerCase()), has=hdr.includes('sku');
-    const col=(f,d)=>has?hdr.findIndex(f):d;
-    const cN=col(v=>v==='номер'||v==='№',0),cC=col(v=>v.startsWith('код'),1),cS=col(v=>v==='sku',2),cM=col(v=>v.startsWith('назван')||v.startsWith('наименов'),3),cL=col(v=>v.startsWith('ссылк'),4);
-    if(has&&cM<0){flash('Не нашла колонку «Название» в первой строке');return}
-    const g=(r,c)=>c<0||r[c]==null?'':String(r[c]).trim();
-    const start=has||isNaN(parseInt(rows[0]&&rows[0][0]))?1:0, items=[];
-    for(let i=start;i<rows.length;i++){const r=rows[i],name=g(r,cM),sku=g(r,cS);
-      if(!name&&!sku)continue;
-      items.push({n:g(r,cN)||String(i+1),code:g(r,cC),sku,name,link:safe(g(r,cL))})}
-    if(!items.length){flash('В файле нет позиций');return}
-    const d=diffItems(S.items,items);
-    items.forEach(x=>{if(x.link)S.links[x.sku]=x.link;else if(S.links[x.sku])x.link=S.links[x.sku]});
-    const keep={};items.forEach(x=>{if(S.st[x.n])keep[x.n]=S.st[x.n]});
-    S.diff=S.items.length?d:null;S.items=items;S.st=keep;S.pos=0;S.tab=S.diff?'list':'check';save();flash('Загружено позиций: '+items.length)
-  }catch(err){flash('Не удалось прочитать файл')}};
-  rd.readAsArrayBuffer(file);
-}
-$('#f').addEventListener('change',e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value=''});
-
-function diffItems(a,b){
-  const ma={},mb={};a.forEach(x=>ma[x.sku]=x);b.forEach(x=>mb[x.sku]=x);
-  const add=b.filter(x=>!ma[x.sku]),rem=a.filter(x=>!mb[x.sku]),chg=[];
-  b.forEach(x=>{const o=ma[x.sku];if(!o)return;const t=[];
-    if(o.n!==x.n)t.push('номер '+o.n+' → '+x.n);
-    if(o.name!==x.name)t.push('название «'+o.name+'» → «'+x.name+'»');
-    if(o.code!==x.code)t.push('код поставщика '+o.code+' → '+x.code);
-    if(t.length)chg.push({x,t:t.join('; ')})});
-  return {add,rem,chg}}
-function vDiff(){
-  const d=S.diff;if(!d)return '';
-  const L=(t,arr,f)=>arr.length?`<p><b>${t} (${arr.length})</b></p><div class="mut">${arr.slice(0,30).map(f).join('<br>')}${arr.length>30?'<br>и ещё '+(arr.length-30):''}</div>`:'';
-  const same=!d.add.length&&!d.rem.length&&!d.chg.length,nol=S.items.filter(x=>!x.link).length;
-  return `<div class="card"><h2>Что изменилось в новом файле</h2>${same?'<p>Список не изменился.</p>':L('Добавлено',d.add,x=>'№ '+esc(x.n)+' '+esc(x.name))+L('Убрано',d.rem,x=>'№ '+esc(x.n)+' '+esc(x.name))+L('Изменено',d.chg,c=>'№ '+esc(c.x.n)+': '+esc(c.t))}<p>Ссылки сохранены. Без ссылки: ${nol} из ${S.items.length}.</p><button class="btn p" data-act="okdiff">Понятно</button></div>`}
-function bkWarn(){return S.items.length&&(S.bk?Date.now()-S.bk>14*864e5:done()>0)?'<div class="card mut">Сделайте резервную копию: вкладка «Список», «Скопировать копию».</div>':''}
-function empty(){return `<div class="card"><h2>Загрузите список</h2><p class="mut">Excel с колонками: Номер, Код товара поставщика, SKU, Название. Загрузить нужно один раз, дальше список хранится в телефоне.</p><div class="row2"><button class="btn p" data-act="upload">Выбрать файл Excel</button></div></div>`}
-
-function vCheck(){
-  if(!S.items.length)return empty();
-  const it=S.items[S.pos],a=S.st[it.n],d=done(),N=S.items.length;
-  const b=(k,t,s)=>`<button class="b-${k} ${a===k?'sel':''}" data-act="set" data-v="${k}">${t}<small>${s}</small></button>`;
-  return `${bkWarn()}<div class="mut">Отмечено ${d} из ${N}</div><div class="pg"><i style="width:${d/N*100}%"></i></div>
-  <div class="card"><div class="num">№ ${esc(it.n)} · позиция ${S.pos+1} из ${N}</div><h2>${esc(it.name)}</h2>
-  <div class="sku">SKU ${esc(it.sku)}</div>
-  <div class="row2">${it.link?`<a class="btn p" href="${esc(it.link)}" target="_blank" rel="noopener">Открыть товар</a>`:`<a class="btn" href="${SITE}" target="_blank" rel="noopener">Открыть сайт</a>`}<button class="btn" data-act="cp" data-v="${esc(it.sku)}">Копировать SKU</button></div>${it.link?'':'<label>Ссылка на товар: вставьте, и она сохранится</label><input type="text" id="lk" placeholder="https://goldapple.by/...">'}
-  <div class="big">${b('many','Есть в наличии','много')}${b('few','Осталось меньше 3','мало')}${b('none','Нет в наличии','нет')}</div></div>
-  <div class="row2"><button class="btn" data-act="prev">‹ Назад</button><button class="btn" data-act="next">Пропустить ›</button><button class="btn" data-act="todo">К неотмеченным</button></div>`;
-}
-
-function vList(){
-  let h=`<div class="row2"><button class="btn p" data-act="add">Добавить позицию</button><button class="btn" data-act="upload">Загрузить Excel</button></div><div class="row2"><button class="btn" data-act="cplist">Скопировать список (для Excel)</button></div>
-  <div class="card"><b>Резервная копия</b><div class="mut">${S.bk?'Последняя: '+new Date(S.bk).toLocaleDateString('ru-RU'):'Копия ещё не делалась'}. В ней список, ссылки и отметки. Отправьте текст себе в мессенджер.</div>
-  <div class="row2"><button class="btn p" data-act="mkbk">Скопировать копию</button></div>
-  <label>Восстановить: вставьте текст копии</label><input type="text" id="bkin" placeholder="вставьте копию сюда"><div class="row2"><button class="btn" data-act="rsbk">Восстановить</button></div></div>`;
-  if(S.edit)h+=form();
-  h+=`<div class="card">`+(S.items.length?S.items.map((x,i)=>`<div class="li" data-act="edit" data-i="${i}"><span class="dot ${S.st[x.n]||''}"></span><b>${esc(x.n)}</b><span>${esc(x.name)}</span></div>`).join(''):'<span class="mut">Список пуст</span>')+`</div>`;
-  return h;
-}
-function form(){
-  const i=S.edit.i,x=i<0?{n:'',code:'',sku:'',name:''}:S.items[i];
-  return `<div class="card"><label>Номер</label><input type="text" id="e_n" value="${esc(x.n)}"><label>Код товара поставщика</label><input type="text" id="e_c" value="${esc(x.code)}"><label>SKU (артикул)</label><input type="text" id="e_s" value="${esc(x.sku)}"><label>Название</label><input type="text" id="e_m" value="${esc(x.name)}"><label>Ссылка на товар</label><input type="text" id="e_l" value="${esc(x.link||'')}">
-  <div class="row2"><button class="btn p" data-act="saveedit">Сохранить</button><button class="btn" data-act="canceledit">Отмена</button></div>
-  ${i>=0?`<div class="row2"><button class="btn d" data-act="del">${S.armed==='del'?'Точно удалить?':'Удалить позицию'}</button></div>`:''}</div>`;
-}
-
-function report(){
-  const by=k=>S.items.filter(x=>S.st[x.n]===k).map(x=>x.n).sort((a,b)=>parseFloat(a)-parseFloat(b)).join(', ');
-  return `Отчет из магазина\nДобрый день!\nМагазин: ${STORE}\nНет в наличии: ${by('none')}\nМало (3 шт и меньше): ${by('few')}`;
-}
-function vRep(){
-  if(!S.items.length)return empty();
-  const left=S.items.length-done();
-  return `<div class="card">${left?`<div class="warn">Не отмечено позиций: ${left}</div>`:''}<pre>${esc(report())}</pre></div>
-  <div class="row2"><button class="btn p" data-act="cprep">Скопировать отчёт</button></div>
-  <div class="row2"><button class="btn d" data-act="reset">${S.armed==='reset'?'Точно сбросить?':'Начать новую проверку'}</button></div>`;
-}
-
-function render(){
-  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===S.tab));
-  $('#main').innerHTML=(S.msg?`<div class="card mut">${esc(S.msg)}</div>`:'')+(S.tab==='list'?vDiff():'')+(S.tab==='check'?vCheck():S.tab==='list'?vList():vRep());
-}
-document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-tab],[data-act]');if(!t)return;
-  if(t.dataset.tab){S.tab=t.dataset.tab;S.edit=null;render();return}
-  const a=t.dataset.act,n=S.items.length;
-  if(a==='upload')$('#f').click();
-  else if(a==='set'){S.st[S.items[S.pos].n]=t.dataset.v;if(S.pos<n-1)S.pos++;save();render();scrollTo(0,0)}
-  else if(a==='next'){if(S.pos<n-1)S.pos++;save();render()}
-  else if(a==='prev'){if(S.pos>0)S.pos--;save();render()}
-  else if(a==='todo'){let j=S.items.findIndex((x,i)=>i>S.pos&&!S.st[x.n]);if(j<0)j=S.items.findIndex(x=>!S.st[x.n]);if(j<0)flash('Все позиции отмечены');else{S.pos=j;save();render()}}
-  else if(a==='cp')copy(t.dataset.v);
-  else if(a==='cprep')copy(report());
-  else if(a==='okdiff'){S.diff=null;render()}
-  else if(a==='mkbk'){S.bk=Date.now();save();copy('OTCHET1:'+JSON.stringify({items:S.items,st:S.st,links:S.links}))}
-  else if(a==='rsbk'){try{
-    const d=JSON.parse($('#bkin').value.trim().replace(/^OTCHET1:/,''));if(!Array.isArray(d.items))throw 0;
-    const L={};for(const k in (d.links||{})){const u=safe(String(d.links[k]));if(u)L[k]=u}
-    S.items=d.items.map(x=>({n:String(x.n),code:String(x.code||''),sku:String(x.sku||''),name:String(x.name||''),link:safe(String(x.link||''))}));
-    S.items.forEach(x=>{if(x.link)L[x.sku]=x.link});S.links=L;S.st=d.st||{};S.pos=0;S.diff=null;save();flash('Восстановлено позиций: '+S.items.length)
-  }catch(err){flash('Не удалось прочитать копию. Скопируйте текст целиком')}}
-  else if(a==='cplist')copy(S.items.map(x=>[x.n,x.code,x.sku,x.name,x.link||''].join('\t')).join('\n'));
-  else if(a==='reset')arm('reset',()=>{S.st={};S.pos=0;S.tab='check';save();render()});
-  else if(a==='add'){S.edit={i:-1};render()}
-  else if(a==='edit'){S.edit={i:+t.dataset.i};render();scrollTo(0,0)}
-  else if(a==='canceledit'){S.edit=null;render()}
-  else if(a==='del')arm('del',()=>{const x=S.items[S.edit.i];delete S.st[x.n];S.items.splice(S.edit.i,1);S.pos=Math.min(S.pos,Math.max(0,S.items.length-1));S.edit=null;save();render()});
-  else if(a==='saveedit'){
-    const x={n:$('#e_n').value.trim(),code:$('#e_c').value.trim(),sku:$('#e_s').value.trim(),name:$('#e_m').value.trim(),link:safe($('#e_l').value.trim())};
-    if(!x.n||!x.name){flash('Заполните номер и название');return}
-    if(x.link)S.links[x.sku]=x.link;else delete S.links[x.sku];
-    const i=S.edit.i;
-    if(i<0)S.items.push(x);else{if(S.items[i].n!==x.n){S.st[x.n]=S.st[S.items[i].n];delete S.st[S.items[i].n]}S.items[i]=x}
-    S.edit=null;save();render();
+  :root {
+    --bg: #ffffff; --fg: #111111; --muted: #6b6b6b; --line: #e6e6e6; --card: #f6f6f6;
+    --accent: #000000; --accent-fg: #ffffff; --ok: #1f7a3a;
   }
-});
-document.addEventListener('change',e=>{
-  if(e.target.id==='lk'){const v=safe(e.target.value.trim());if(!v){flash('Ссылка должна начинаться с https://');return}S.items[S.pos].link=v;S.links[S.items[S.pos].sku]=v;save();render()}
-});
-render();
-</script></body></html>
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111111; --fg: #f2f2f2; --muted: #9a9a9a; --line: #2a2a2a; --card: #1b1b1b;
+      --accent: #ffffff; --accent-fg: #000000; --ok: #5bc27a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom)); }
+  main { max-width: 620px; margin: 0 auto; }
+  h1 { font-size: 26px; line-height: 1.2; margin: 8px 0 6px; letter-spacing: -.2px; }
+  h2 { font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; margin: 28px 0 10px; color: var(--muted); }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 8px 0; }
+  .card { background: var(--card); border-radius: 12px; padding: 14px; margin: 12px 0; }
+  code, textarea { font: 13px/1.4 ui-monospace, Menlo, monospace; }
+  textarea { width: 100%; height: 96px; border: 1px solid var(--line); border-radius: 8px; padding: 8px;
+    background: var(--bg); color: var(--fg); resize: none; word-break: break-all; }
+  button, .btn { appearance: none; border: 0; border-radius: 10px; padding: 13px 16px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: var(--accent-fg); width: 100%; display: block; text-align: center;
+    text-decoration: none; margin-top: 8px; }
+  .btn.sec { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .ok { color: var(--ok); font-size: 14px; min-height: 20px; margin-top: 6px; }
+  a { color: inherit; }
+  .step { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-fg);
+    font-size: 12px; font-weight: 700; align-items: center; justify-content: center; margin-right: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Проверка наличия в «Золотом Яблоке»</h1>
+  <p class="muted">Загружаете xlsx. Для каждого товара с листа «МНС Галерея» (все строки) проверяется наличие в магазине
+    <b>пр-т Победителей, 9 (Galleria Minsk)</b>. На выходе — список товаров, которых <b>нет</b> или <b>мало</b> (3 шт. и меньше). Итог — готовый текст с номерами товаров из первой колонки, который можно скопировать.</p>
+
+  <h2>Почему через закладку</h2>
+  <p class="muted">goldapple.by не отвечает другим сайтам: у него защита от ботов. Поэтому проверка запускается
+    закладкой прямо на открытом goldapple.by. Запросы идут из вашего Safari, так же как при нажатии
+    «Наличие в магазинах».</p>
+
+  <h2>Установка (один раз)</h2>
+  <div class="card">
+    <p><span class="step">1</span>Скопируйте код закладки:</p>
+    <textarea id="code" readonly></textarea>
+    <button id="copy">Скопировать код</button>
+    <div class="ok" id="copied"></div>
+  </div>
+  <div class="card">
+    <p><span class="step">2</span>Создайте закладку в Safari:</p>
+    <ol>
+      <li>На этой странице нажмите <b>«Поделиться»</b> → <b>«Добавить закладку»</b>. Назовите её, например, <b>«Проверить наличие»</b> → «Сохранить».</li>
+      <li>Откройте <b>Закладки</b> → <b>«Изменить»</b> → выберите новую закладку.</li>
+      <li>Сотрите адрес и вставьте скопированный код → «Готово».</li>
+    </ol>
+  </div>
+  <p class="muted">На компьютере достаточно перетащить эту кнопку на панель закладок:
+    <a id="drag" class="btn sec" href="#">⭐ Проверить наличие</a></p>
+
+  <h2>Как проверить</h2>
+  <div class="card">
+    <ol>
+      <li>Откройте <a href="https://goldapple.by/" target="_blank" rel="noopener">goldapple.by</a> и дождитесь загрузки сайта.</li>
+      <li>Откройте закладки и нажмите <b>«Проверить наличие»</b>. Поверх сайта появится окно.</li>
+      <li>Выберите xlsx-файл. Лист «МНС Галерея» выберется сам. Нажмите <b>«Проверить»</b>.</li>
+    </ol>
+    <p class="muted">Сайт пропускает примерно 3 запроса в минуту, поэтому проверка всех 231 товара занимает примерно 1 ч 20 мин.
+      Держите вкладку открытой, а экран включённым. Если страница перезагрузится или вы закроете окно,
+      нажмите закладку ещё раз и затем «Продолжить»: уже проверенные товары не проверяются повторно.</p>
+  </div>
+  <a class="btn" href="https://goldapple.by/" target="_blank" rel="noopener">Открыть goldapple.by</a>
+</main>
+<script>
+  (function () {
+    var base = location.href.replace(/[#?].*$/, '').replace(/[^/]*$/, '');
+    var code = "javascript:(function(){var s=document.createElement('script');s.src='" + base +
+      "checker.js?v='+Date.now();s.onerror=function(){alert('Не удалось загрузить проверку. Проверьте интернет.')};document.body.appendChild(s)})();";
+    document.getElementById('code').value = code;
+    document.getElementById('drag').href = code;
+    document.getElementById('drag').addEventListener('click', function (e) { e.preventDefault(); alert('Перетащите кнопку на панель закладок.'); });
+    document.getElementById('copy').addEventListener('click', function () {
+      var ta = document.getElementById('code');
+      var done = function () { document.getElementById('copied').textContent = 'Скопировано ✓'; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(done, function () { ta.select(); ta.setSelectionRange(0, code.length); document.execCommand('copy'); done(); });
+      } else { ta.select(); ta.setSelectionRange(0, code.length); document.execCommand('copy'); done(); }
+    });
+  })();
+</script>
+</body>
+</html>
