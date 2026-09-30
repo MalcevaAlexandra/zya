@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Отчёт по наличию</title>
+<style>
+:root{box-sizing:border-box;--bg:#fff;--card:#fff;--tx:#000;--mut:#5c5c5c;--line:#e3e3e3;--acc:#000;--acct:#fff;--lime:#c6f432;--many:#000;--few:#000;--none:#d1342a;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--card:#111;--tx:#fff;--mut:#a3a3a3;--line:#2b2b2b;--acc:#c6f432;--acct:#000;--none:#ff6b5e}}
+:root[data-theme="dark"]{--bg:#000;--card:#111;--tx:#fff;--mut:#a3a3a3;--line:#2b2b2b;--acc:#c6f432;--acct:#000;--none:#ff6b5e}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:17px/1.4 -apple-system,"SF Pro Text",system-ui,"Segoe UI",sans-serif}
+.w{max-width:520px;margin:0 auto;padding:12px 14px 40px}
+nav{display:flex;gap:6px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);padding:8px 0;z-index:2}
+nav button{flex:1;padding:10px 4px;border:1.5px solid var(--line);background:var(--card);color:var(--tx);border-radius:12px;font:600 15px inherit;font-family:inherit}
+nav button.on{background:var(--acc);border-color:var(--acc);color:var(--acct)}
+nav{border-bottom:4px solid var(--lime);padding-bottom:10px;margin-bottom:6px}
+button{font-family:inherit;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:10px 0}
+.pg{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0 2px}
+.pg i{display:block;height:100%;background:var(--lime)}
+.mut{color:var(--mut);font-size:14px}
+h2{margin:2px 0 6px;font-size:21px;line-height:1.25}
+.num{font-size:14px;color:var(--mut)}
+.sku{font-variant-numeric:tabular-nums;font-size:15px}
+.big{display:grid;gap:10px;margin-top:14px}
+.big button{padding:17px;border-radius:14px;border:2.5px solid;background:transparent;font-size:20px;font-weight:700;text-align:left}
+.b-many,.b-few{color:var(--tx);border-color:var(--tx)}.b-none{color:var(--none);border-color:var(--none)}
+.big button.sel.b-many{background:var(--lime);color:#000;border-color:var(--lime)}.big button.sel.b-few{background:var(--tx);color:var(--bg)}.big button.sel.b-none{background:var(--none);color:#fff}
+.big button.sel::before{content:"✓ "}
+.big small{font-weight:500;font-size:14px;margin-left:6px}
+.row2{display:flex;gap:8px;margin:8px 0}
+.btn{flex:1;padding:12px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);color:var(--tx);font-size:16px;font-weight:600;text-align:center;text-decoration:none}
+.btn.p{background:var(--acc);border-color:var(--acc);color:var(--acct)}
+.btn.p:active{background:var(--lime);color:#000}
+.btn.d{color:var(--none);border-color:var(--none)}
+.li{display:flex;gap:10px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line)}
+.li span:last-child{flex:1}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--line);flex:none}
+.dot.many{background:var(--lime);box-shadow:0 0 0 1.5px var(--tx)}.dot.few{background:var(--tx)}.dot.none{background:var(--none)}
+input[type=text]{width:100%;padding:11px;margin:4px 0 10px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--tx);font:16px inherit;font-family:inherit}
+label{font-size:14px;color:var(--mut)}
+pre{white-space:pre-wrap;word-break:break-word;font:16px/1.5 inherit;font-family:inherit;margin:0}
+.warn{background:var(--lime);color:#000;font-weight:700;padding:4px 10px;border-radius:8px;display:inline-block;margin-bottom:10px}
+</style></head><body>
+<div class="w">
+<nav><button data-tab="check">Проверка</button><button data-tab="list">Список</button><button data-tab="rep">Отчёт</button></nav>
+<div id="main"></div>
+<input type="file" id="f" accept=".xlsx,.xls,.csv" hidden>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const K='gareport.v1', SITE='https://goldapple.by/', STORE='минск, пр-т. Победителей, 9';
+const LBL={many:'Много',few:'Мало',none:'Нет'};
+let S={items:[],st:{},pos:0,tab:'check',edit:null,armed:null,msg:''};
+try{const d=JSON.parse(localStorage.getItem(K)||'null');if(d){S.items=d.items||[];S.st=d.st||{};S.pos=d.pos||0}}catch(e){}
+function save(){try{localStorage.setItem(K,JSON.stringify({items:S.items,st:S.st,pos:S.pos}))}catch(e){}}
+function copy(t){try{navigator.clipboard.writeText(t).then(()=>flash('Скопировано'),()=>fb(t))}catch(e){fb(t)}}
+function fb(t){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');flash('Скопировано')}catch(e){flash('Не удалось скопировать, выделите текст вручную')}a.remove()}
+function flash(m){S.msg=m;render();setTimeout(()=>{S.msg='';render()},2000)}
+function arm(k,fn){if(S.armed===k){S.armed=null;fn()}else{S.armed=k;render();setTimeout(()=>{if(S.armed===k){S.armed=null;render()}},3000)}}
+const safe=u=>/^https?:\/\//i.test(u)?u:'';
+const done=()=>S.items.filter(x=>S.st[x.n]).length;
+
+function importFile(file){
+  if(typeof XLSX==='undefined'){flash('Не загрузился модуль Excel. Проверьте интернет');return}
+  const rd=new FileReader();
+  rd.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+    const start=isNaN(parseInt(rows[0]&&rows[0][0]))?1:0, items=[];
+    for(let i=start;i<rows.length;i++){const r=rows[i],name=String(r[3]).trim(),sku=String(r[2]).trim();
+      if(!name&&!sku)continue;
+      items.push({n:String(r[0]||i+1).trim(),code:String(r[1]).trim(),sku,name,link:safe(String(r[4]||'').trim())})}
+    if(!items.length){flash('В файле нет позиций');return}
+    const old={};S.items.forEach(x=>{if(x.link)old[x.sku]=x.link});items.forEach(x=>{if(!x.link&&old[x.sku])x.link=old[x.sku]});
+    const keep={};items.forEach(x=>{if(S.st[x.n])keep[x.n]=S.st[x.n]});
+    S.items=items;S.st=keep;S.pos=0;S.tab='check';save();flash('Загружено позиций: '+items.length)
+  }catch(err){flash('Не удалось прочитать файл')}};
+  rd.readAsArrayBuffer(file);
+}
+$('#f').addEventListener('change',e=>{if(e.target.files[0])importFile(e.target.files[0]);e.target.value=''});
+
+function empty(){return `<div class="card"><h2>Загрузите список</h2><p class="mut">Excel с колонками: Номер, Код товара поставщика, SKU, Название. Загрузить нужно один раз, дальше список хранится в телефоне.</p><div class="row2"><button class="btn p" data-act="upload">Выбрать файл Excel</button></div></div>`}
+
+function vCheck(){
+  if(!S.items.length)return empty();
+  const it=S.items[S.pos],a=S.st[it.n],d=done(),N=S.items.length;
+  const b=(k,t,s)=>`<button class="b-${k} ${a===k?'sel':''}" data-act="set" data-v="${k}">${t}<small>${s}</small></button>`;
+  return `<div class="mut">Отмечено ${d} из ${N}</div><div class="pg"><i style="width:${d/N*100}%"></i></div>
+  <div class="card"><div class="num">№ ${esc(it.n)} · позиция ${S.pos+1} из ${N}</div><h2>${esc(it.name)}</h2>
+  <div class="sku">SKU ${esc(it.sku)}</div>
+  <div class="row2">${it.link?`<a class="btn p" href="${esc(it.link)}" target="_blank" rel="noopener">Открыть товар</a>`:`<a class="btn" href="${SITE}" target="_blank" rel="noopener">Открыть сайт</a>`}<button class="btn" data-act="cp" data-v="${esc(it.sku)}">Копировать SKU</button></div>${it.link?'':'<label>Ссылка на товар: вставьте, и она сохранится</label><input type="text" id="lk" placeholder="https://goldapple.by/...">'}
+  <div class="big">${b('many','Много','больше 3 шт')}${b('few','Мало','3 шт и меньше')}${b('none','Нет','нет в наличии')}</div></div>
+  <div class="row2"><button class="btn" data-act="prev">‹ Назад</button><button class="btn" data-act="next">Пропустить ›</button><button class="btn" data-act="todo">К неотмеченным</button></div>`;
+}
+
+function vList(){
+  let h=`<div class="row2"><button class="btn p" data-act="add">Добавить позицию</button><button class="btn" data-act="upload">Загрузить Excel</button></div><div class="row2"><button class="btn" data-act="cplist">Скопировать список (для Excel)</button></div>`;
+  if(S.edit)h+=form();
+  h+=`<div class="card">`+(S.items.length?S.items.map((x,i)=>`<div class="li" data-act="edit" data-i="${i}"><span class="dot ${S.st[x.n]||''}"></span><b>${esc(x.n)}</b><span>${esc(x.name)}</span></div>`).join(''):'<span class="mut">Список пуст</span>')+`</div>`;
+  return h;
+}
+function form(){
+  const i=S.edit.i,x=i<0?{n:'',code:'',sku:'',name:''}:S.items[i];
+  return `<div class="card"><label>Номер</label><input type="text" id="e_n" value="${esc(x.n)}"><label>Код товара поставщика</label><input type="text" id="e_c" value="${esc(x.code)}"><label>SKU (артикул)</label><input type="text" id="e_s" value="${esc(x.sku)}"><label>Название</label><input type="text" id="e_m" value="${esc(x.name)}"><label>Ссылка на товар</label><input type="text" id="e_l" value="${esc(x.link||'')}">
+  <div class="row2"><button class="btn p" data-act="saveedit">Сохранить</button><button class="btn" data-act="canceledit">Отмена</button></div>
+  ${i>=0?`<div class="row2"><button class="btn d" data-act="del">${S.armed==='del'?'Точно удалить?':'Удалить позицию'}</button></div>`:''}</div>`;
+}
+
+function report(){
+  const by=k=>S.items.filter(x=>S.st[x.n]===k).map(x=>x.n).sort((a,b)=>parseFloat(a)-parseFloat(b)).join(', ');
+  return `Отчет из магазина\nДобрый день!\nМагазин: ${STORE}\nНет в наличии: ${by('none')}\nМало (3 шт и меньше): ${by('few')}`;
+}
+function vRep(){
+  if(!S.items.length)return empty();
+  const left=S.items.length-done();
+  return `<div class="card">${left?`<div class="warn">Не отмечено позиций: ${left}</div>`:''}<pre>${esc(report())}</pre></div>
+  <div class="row2"><button class="btn p" data-act="cprep">Скопировать отчёт</button></div>
+  <div class="row2"><button class="btn d" data-act="reset">${S.armed==='reset'?'Точно сбросить?':'Начать новую проверку'}</button></div>`;
+}
+
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===S.tab));
+  $('#main').innerHTML=(S.msg?`<div class="card mut">${esc(S.msg)}</div>`:'')+(S.tab==='check'?vCheck():S.tab==='list'?vList():vRep());
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab],[data-act]');if(!t)return;
+  if(t.dataset.tab){S.tab=t.dataset.tab;S.edit=null;render();return}
+  const a=t.dataset.act,n=S.items.length;
+  if(a==='upload')$('#f').click();
+  else if(a==='set'){S.st[S.items[S.pos].n]=t.dataset.v;if(S.pos<n-1)S.pos++;save();render();scrollTo(0,0)}
+  else if(a==='next'){if(S.pos<n-1)S.pos++;save();render()}
+  else if(a==='prev'){if(S.pos>0)S.pos--;save();render()}
+  else if(a==='todo'){let j=S.items.findIndex((x,i)=>i>S.pos&&!S.st[x.n]);if(j<0)j=S.items.findIndex(x=>!S.st[x.n]);if(j<0)flash('Все позиции отмечены');else{S.pos=j;save();render()}}
+  else if(a==='cp')copy(t.dataset.v);
+  else if(a==='cprep')copy(report());
+  else if(a==='cplist')copy(S.items.map(x=>[x.n,x.code,x.sku,x.name,x.link||''].join('\t')).join('\n'));
+  else if(a==='reset')arm('reset',()=>{S.st={};S.pos=0;S.tab='check';save();render()});
+  else if(a==='add'){S.edit={i:-1};render()}
+  else if(a==='edit'){S.edit={i:+t.dataset.i};render();scrollTo(0,0)}
+  else if(a==='canceledit'){S.edit=null;render()}
+  else if(a==='del')arm('del',()=>{const x=S.items[S.edit.i];delete S.st[x.n];S.items.splice(S.edit.i,1);S.pos=Math.min(S.pos,Math.max(0,S.items.length-1));S.edit=null;save();render()});
+  else if(a==='saveedit'){
+    const x={n:$('#e_n').value.trim(),code:$('#e_c').value.trim(),sku:$('#e_s').value.trim(),name:$('#e_m').value.trim(),link:safe($('#e_l').value.trim())};
+    if(!x.n||!x.name){flash('Заполните номер и название');return}
+    const i=S.edit.i;
+    if(i<0)S.items.push(x);else{if(S.items[i].n!==x.n){S.st[x.n]=S.st[S.items[i].n];delete S.st[S.items[i].n]}S.items[i]=x}
+    S.edit=null;save();render();
+  }
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='lk'){const v=safe(e.target.value.trim());if(!v){flash('Ссылка должна начинаться с https://');return}S.items[S.pos].link=v;save();render()}
+});
+render();
+</script></body></html>
